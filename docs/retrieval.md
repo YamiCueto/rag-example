@@ -47,6 +47,50 @@ desbordamiento y limita pequeños errores de redondeo al intervalo [-1, 1].
 
 ## Búsqueda exhaustiva, ranking y Top-K
 
+```mermaid
+flowchart TD
+    QueryText["Consulta en texto natural: query"]
+    
+    subgraph Inferencia["1. Inferencia de Consulta"]
+        Prefix["Anteponer prefijo: 'query: '"]
+        Tokenizer["Tokenizar texto (tokenizers E5)"]
+        ONNX["Inferencia ONNX Runtime (CPU)"]
+        Pooling["Mean pooling ponderado por attention mask"]
+        Norm["Normalización L2: unit_vector()"]
+        QueryVec["Vector de consulta q (384 dimensiones)"]
+        
+        QueryText --> Prefix --> Tokenizer --> ONNX --> Pooling --> Norm --> QueryVec
+    end
+
+    subgraph Exhaustivo["2. Comparación Exhaustiva O(N x D)"]
+        Index["VectorIndex cargado del disco"]
+        Records["N registros del índice (vectores v_i)"]
+        Index --> Records
+        
+        QueryVec --> DotProduct["score_all(): Cosine Similarity"]
+        Records --> DotProduct
+        DotProduct --> Candidates["tuple[SearchResult, ...]\nN candidatos (orden original del índice, rank=0)"]
+    end
+
+    subgraph RankingSec["3. Ranking y Desempate O(N log N)"]
+        Candidates --> Sort["rank_candidates():\n1. Score descendente (-score)\n2. Desempate: chunk_id ascendente"]
+        Sort --> Ranked["Ranking completo: rank=1..N"]
+    end
+
+    subgraph Seleccion["4. Corte Top-K O(min(K, N))"]
+        Ranked --> Slice["top_k(ranking, k):\nTomar primeros K elementos"]
+        Slice --> TopResults["Top-K SearchResults\n(Sin umbral de corte: siempre devuelve min(K, N))"]
+    end
+
+    subgraph Trazabilidad["5. Trazabilidad del Experimento"]
+        TopResults --> Exp["SearchExperiment"]
+        QueryText --> Exp
+        QueryVec --> Exp
+        Ranked --> Exp
+        Candidates --> Exp
+    end
+```
+
 1. `score_all()` recorre cada vector del índice y conserva su score y metadata.
    Estos candidatos mantienen el orden del índice y tienen `rank=0`.
 2. `rank_candidates()` ordena por score descendente; empates exactos se resuelven
@@ -104,6 +148,26 @@ colecciones: candidatos, ranking completo y seleccionados.
 | --- | --- |
 | `retrieval_config_id` | Versión, métrica, algoritmo y Top-K efectivos |
 | `retrieval_experiment_id` | Índice ID, artifact SHA-256, consulta exacta, prefijo, especificación del embedding y retrieval config ID |
+
+```mermaid
+flowchart TD
+    subgraph Config["Configuración de Retrieval"]
+        RConfig["RetrievalConfig\n- retrieval_version\n- similarity_metric\n- algorithm\n- top_k"]
+        RConfig -->|"stable_id('retrieval-config', config)"| RConfigID["Retrieval Config ID\nretrieval-config-<sha256>"]
+    end
+
+    subgraph Experimento["Identidad del Experimento de Búsqueda"]
+        RConfigID --> ExpPayload
+        IndexID["Vector Index ID\n(Identidad lógica del índice)"] --> ExpPayload
+        ArtifactSHA["Artifact SHA-256\n(Checksum físico de index.json)"] --> ExpPayload
+        QueryExact["Consulta exacta (query)"] --> ExpPayload
+        QueryPrefix["Prefijo de consulta ('query: ')"] --> ExpPayload
+        QueryEmbed["Query embedding spec"] --> ExpPayload
+
+        ExpPayload["Payload canónico de experimento"]
+        ExpPayload -->|"stable_id('retrieval-experiment', payload)"| ExpID["Retrieval Experiment ID\nretrieval-experiment-<sha256>"]
+    end
+```
 
 Los IDs usan `stable_id()`: SHA-256 de JSON canónico con tipo y versión de esquema.
 Cambiar K o consulta cambia el experimento, sin invalidar ni reconstruir el índice.

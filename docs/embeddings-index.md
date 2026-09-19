@@ -83,6 +83,41 @@ El checksum **sí** depende de todos los bytes, incluidos los vectores y runtime
 La serialización de archivo usa JSON UTF-8 legible, claves ordenadas y nueva línea
 final; rechaza NaN e Infinity. No usa exactamente los bytes compactos del ID lógico.
 
+```mermaid
+flowchart TD
+    subgraph Receta["1. Receta declarativa (Que construir)"]
+        Spec["build_spec\n- chunk_dataset_id\n- embedding config (modelo, revision, hashes)\n- embedding_version e index_version\n- index_format"]
+        Spec -->|"stable_id('vector-index', spec)\nJSON canónico UTF-8"| LogicalID["Vector Index ID\nvector-index-<sha256>\n(Identidad lógica del índice)"]
+    end
+
+    subgraph Generacion["2. Generación física (Lo que se ejecuta)"]
+        Dataset["Chunks del Dataset"] --> Inferencia["Inferencia Local ONNX\n(CPU, modelo E5 cuantizado)"]
+        Inferencia --> Records["Records: vector (384 floats) + metadata + chunk_id"]
+        Runtime["Proveniencia de Runtime\n(Python, OS, ONNX provider, hilos)"] --> ProvenanceData["provenance dict"]
+        
+        LogicalID --> BuildIndex["VectorIndex in-memory\n(id, spec, records, provenance)"]
+        Records --> BuildIndex
+        ProvenanceData --> BuildIndex
+    end
+
+    subgraph Persistencia["3. Persistencia en disco"]
+        BuildIndex -->|"json.dumps(indent=2, sort_keys=True)"| Serialized["index.json (bytes en disco)"]
+        Serialized -->|"sha256_bytes(bytes)"| ArtifactSHA["Artifact Checksum\nindex.sha256\n(Integridad física del artefacto)"]
+        
+        Serialized --> Directory["artifacts/indexes/<vector_index_id>/index.json"]
+        ArtifactSHA --> DirectorySha["artifacts/indexes/<vector_index_id>/index.sha256"]
+    end
+
+    subgraph Verificacion["4. Política de persistencia y reutilización"]
+        Directory --> Check{"Existe el directorio?"}
+        Check -- "No" --> WriteStaging["Escritura atómica en staging temporal y rename"]
+        Check -- "Sí" --> ReadExisting["Leer artefacto y verificar sha256"]
+        ReadExisting -- "Checksum y bytes coinciden" --> Reused["Reutilizar artefacto verificado (reused=True)"]
+        ReadExisting -- "Mismo ID pero bytes distintos" --> CollisionError["Error: FileExistsError (no sobrescribir)"]
+        ReadExisting -- "Checksum no coincide" --> CorruptError["Error: ValueError (artefacto corrupto)"]
+    end
+```
+
 La construcción valida dimensión, números finitos y ausencia de chunk IDs
 duplicados. Como la inferencia se invoca por chunk, se conserva su orden y relación.
 El formato es deliberadamente redundante para poder inspeccionar un registro solo.
