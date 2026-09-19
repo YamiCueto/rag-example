@@ -1,0 +1,9 @@
+Biblioteca del barrio Los Cedros
+
+La biblioteca abre de lunes a viernes de 8:00 a 18:00.
+Los sábados abre de 9:00 a 13:00. Los domingos permanece cerrada.
+Cada persona puede pedir prestados hasta tres libros durante catorce días.
+Para solicitar un préstamo se necesita presentar el carné de la biblioteca.
+La sala de lectura permite consultar libros sin solicitar un préstamo.
+
+Este documento es ficticio y se utiliza únicamente para ejercicios educativos.

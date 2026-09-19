@@ -1,0 +1,19 @@
+{
+  "provider": "onnxruntime-cpu",
+  "model": "intfloat/multilingual-e5-small",
+  "revision": "614241f622f53c4eeff9890bdc4f31cfecc418b3",
+  "dimensions": 384,
+  "settings": {
+    "implementation": "e5-onnx-v1",
+    "model_file": "onnx/model_qint8_avx512_vnni.onnx",
+    "model_sha256": "dd476dd0c2514e9b9be83aeb3853fac0763e0bdf4a71645407587d77c48a2d88",
+    "tokenizer_file": "onnx/tokenizer.json",
+    "tokenizer_sha256": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+    "precision": "qint8",
+    "input_prefix": "passage: ",
+    "max_tokens": 512,
+    "overflow": "reject",
+    "pooling": "masked_mean",
+    "normalization": "l2"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "retrieval_version": "1",
+  "similarity_metric": "cosine",
+  "algorithm": "exhaustive",
+  "top_k": 3
+}

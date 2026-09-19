@@ -1,0 +1,1 @@
+"""Laboratorio educativo de RAG."""

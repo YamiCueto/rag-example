@@ -1,0 +1,21 @@
+{
+  "rag_release": "0.1.0",
+  "versions": {
+    "corpus": "1",
+    "ingestion": "1",
+    "chunking": "1",
+    "embedding": "1",
+    "index": "1",
+    "retrieval": "1",
+    "prompt": "1",
+    "generation": "1",
+    "eval_dataset": "1"
+  },
+  "chunking": {
+    "strategy": "fixed_characters",
+    "chunk_size": 500,
+    "overlap": 50
+  },
+  "embedding": {"model_id": null, "revision": null},
+  "generation": {"model_id": null, "revision": null}
+}
