@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Flujo de una Consulta de Retrieval",
+    "output": "docs/architecture/query-flow.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "query-inference",
+        "label": "Inferencia de Query",
+        "focus": ["query_node", "embedder_node", "cosine_node"],
+        "note": "Transformación de la pregunta con prefijo query: en vector unitario de 384 dimensiones."
+      },
+      {
+        "id": "exhaustive-scan",
+        "label": "Comparación Exhaustiva",
+        "focus": ["index_node", "cosine_node", "ranking_node"],
+        "note": "Carga de los vectores del índice y cálculo lineal de similitud coseno sobre todos los registros."
+      },
+      {
+        "id": "ranking-and-topk",
+        "label": "Ranking y Top-K",
+        "focus": ["ranking_node", "topk_node", "result_node"],
+        "note": "Ordenamiento descendente con desempate estable y selección de los primeros K resultados."
+      }
+    ]
+  },
+  "lanes": [
+    { "id": "intake_lane", "label": "1. Consulta e Inferencia E5" },
+    { "id": "engine_lane", "label": "2. Búsqueda y Ranking Exhaustivo" },
+    { "id": "output_lane", "label": "3. Evidencia y Trazabilidad" }
+  ],
+  "phases": [
+    { "id": "phase_intake", "label": "Entrada", "fromCol": 0, "toCol": 1 },
+    { "id": "phase_eval", "label": "Comparación Exhaustiva", "fromCol": 2, "toCol": 3, "variant": "emphasis" },
+    { "id": "phase_select", "label": "Orden y Selección", "fromCol": 4, "toCol": 5, "variant": "dashed" }
+  ],
+  "mainPath": [
+    "query_node",
+    "embedder_node",
+    "cosine_node",
+    "ranking_node",
+    "topk_node",
+    "result_node"
+  ],
+  "nodes": [
+    { "id": "query_node", "lane": "intake_lane", "col": 0, "type": "frontend", "label": "Consulta CLI", "sublabel": "texto en español", "width": 132 },
+    { "id": "embedder_node", "lane": "intake_lane", "col": 1, "type": "backend", "label": "Query Embedder", "sublabel": "prefijo query:", "tag": "384-d", "width": 132 },
+    { "id": "index_node", "lane": "engine_lane", "col": 2, "type": "database", "label": "Índice Cargado", "sublabel": "index.json + sha256", "tag": "N vectores", "width": 132 },
+    { "id": "cosine_node", "lane": "engine_lane", "col": 3, "type": "backend", "label": "Cosine Similarity", "sublabel": "score_all()", "tag": "todos los N", "width": 132 },
+    { "id": "ranking_node", "lane": "engine_lane", "col": 4, "type": "backend", "label": "Ranking Completo", "sublabel": "rank_candidates()", "tag": "score desc", "width": 132 },
+    { "id": "topk_node", "lane": "engine_lane", "col": 5, "type": "backend", "label": "Corte Top-K", "sublabel": "top_k() slice [:K]", "tag": "sin threshold", "width": 132 },
+    { "id": "result_node", "lane": "output_lane", "col": 5, "type": "backend", "label": "SearchResult", "sublabel": "evidencia + texto", "tag": "trazabilidad", "width": 132 }
+  ],
+  "edges": [
+    { "id": "edge-query-embed", "from": "query_node", "to": "embedder_node", "label": "texto de query", "variant": "default" },
+    { "id": "edge-embed-cosine", "from": "embedder_node", "to": "cosine_node", "label": "vector 384-d", "variant": "emphasis" },
+    { "id": "edge-index-cosine", "from": "index_node", "to": "cosine_node", "label": "vectores v_i", "variant": "default" },
+    { "id": "edge-cosine-ranking", "from": "cosine_node", "to": "ranking_node", "label": "candidatos rank=0", "variant": "emphasis" },
+    { "id": "edge-ranking-topk", "from": "ranking_node", "to": "topk_node", "label": "ranking 1..N", "variant": "emphasis" },
+    { "id": "edge-topk-result", "from": "topk_node", "to": "result_node", "label": "primeros K", "variant": "emphasis" }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Comparación Exhaustiva O(N x D)",
+      "items": [
+        "Se calculan las similitudes coseno de TODOS los vectores del índice sin descarte prematuro",
+        "Evalúa los N fragmentos del corpus frente al vector de consulta de dimensión D=384",
+        "No utiliza índices aproximados (ANN) ni filtrado por umbral de similitud (threshold)"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Ranking Determinista y Top-K",
+      "items": [
+        "Ordenamiento descendente por score con desempate por chunk_id ascendente",
+        "Top-K toma los primeros K elementos sin garantizar relevancia semántica real",
+        "SearchResult conserva el texto completo y genera retrieval_experiment_id"
+      ]
+    }
+  ]
+}
+

@@ -1,14 +1,42 @@
+# Python & virtual environment
 .venv/
 __pycache__/
 *.py[cod]
+*$py.class
 *.egg-info/
 build/
 dist/
 .pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Environment variables & secrets
 .env
 .env.*
+
+# Local model weights & large binary assets
 .models/
+
+# Lab runtime artifacts (keep directory structure)
 artifacts/indexes/*
 !artifacts/indexes/.gitkeep
 artifacts/manifests/*
 !artifacts/manifests/.gitkeep
+
+# Agent skills & local tooling junctions
+.agents/
+
+# Archify verification sidecars (keep canonical HTML, PNG, JSON and README)
+*.visual-check.*
+
+# IDE & OS files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "diagram_type": "dataflow",
+  "meta": {
+    "title": "Cadena de Identidades y Trazabilidad",
+    "output": "docs/architecture/identities.html",
+    "viewBox": [1080, 500],
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "corpus-and-chunks",
+        "label": "Corpus y Chunks",
+        "focus": ["doc_id", "corpus_id", "chunk_id", "dataset_id"],
+        "note": "Identidades deterministas basadas en bytes originales de archivos y offsets de fragmentos."
+      },
+      {
+        "id": "index-identities",
+        "label": "Receta vs Artefacto",
+        "focus": ["dataset_id", "index_id", "artifact_sha"],
+        "note": "Separación fundamental entre la receta lógica (Vector Index ID) y los bytes serializados (Artifact SHA-256)."
+      },
+      {
+        "id": "experiment-tracking",
+        "label": "Experimento de Retrieval",
+        "focus": ["index_id", "artifact_sha", "config_id", "experiment_id"],
+        "note": "Trazabilidad de la búsqueda que vincula la receta lógica, el checksum del artefacto y la configuración de consulta."
+      }
+    ]
+  },
+  "stages": [
+    { "label": "1. Nivel Corpus" },
+    { "label": "2. Nivel Dataset" },
+    { "label": "3. Nivel Índice" },
+    { "label": "4. Nivel Retrieval" }
+  ],
+  "nodes": [
+    { "id": "doc_id", "type": "database", "label": "Document ID", "sublabel": "ruta POSIX + hash", "stage": 0, "row": 0, "tag": "document-" },
+    { "id": "corpus_id", "type": "database", "label": "Corpus ID", "sublabel": "rutas y hashes", "stage": 0, "row": 1, "tag": "corpus-" },
+    { "id": "chunk_id", "type": "database", "label": "Chunk ID", "sublabel": "offsets y SHA-256", "stage": 1, "row": 0, "tag": "chunk-" },
+    { "id": "dataset_id", "type": "database", "label": "Chunk Dataset ID", "sublabel": "corpus + chunk_ids", "stage": 1, "row": 1, "tag": "chunk-dataset-" },
+    { "id": "index_id", "type": "database", "label": "Vector Index ID", "sublabel": "receta build_spec", "stage": 2, "row": 0, "tag": "identidad lógica" },
+    { "id": "artifact_sha", "type": "security", "label": "Artifact SHA-256", "sublabel": "bytes de index.json", "stage": 2, "row": 1, "tag": "checksum físico" },
+    { "id": "config_id", "type": "backend", "label": "Retrieval Config ID", "sublabel": "métrica, alg y Top-K", "stage": 3, "row": 0, "tag": "retrieval-config-" },
+    { "id": "experiment_id", "type": "backend", "label": "Experiment ID", "sublabel": "query + índice + config", "stage": 3, "row": 1, "tag": "retrieval-exp-" }
+  ],
+  "flows": [
+    { "id": "flow-doc-corpus", "from": "doc_id", "to": "corpus_id", "label": "hashes de fuentes", "classification": "fuentes", "variant": "default", "labelAt": [100, 205] },
+    { "id": "flow-doc-chunk", "from": "doc_id", "to": "chunk_id", "label": "document_id padre", "classification": "padre", "variant": "default", "route": "straight" },
+    { "id": "flow-corpus-dataset", "from": "corpus_id", "to": "dataset_id", "label": "corpus_id upstream", "classification": "upstream", "variant": "emphasis", "route": "straight" },
+    { "id": "flow-chunk-dataset", "from": "chunk_id", "to": "dataset_id", "label": "lista de chunk_ids", "classification": "chunks", "variant": "default", "labelAt": [315, 205] },
+    { "id": "flow-dataset-index", "from": "dataset_id", "to": "index_id", "label": "chunk_dataset_id", "classification": "build_spec", "variant": "emphasis" },
+    { "id": "flow-index-artifact", "from": "index_id", "to": "artifact_sha", "label": "serialización JSON", "classification": "disco", "variant": "dashed", "labelAt": [530, 205] },
+    { "id": "flow-index-experiment", "from": "index_id", "to": "experiment_id", "label": "vector_index_id", "classification": "receta", "variant": "default" },
+    { "id": "flow-artifact-experiment", "from": "artifact_sha", "to": "experiment_id", "label": "artifact_sha256", "classification": "checksum", "variant": "emphasis", "route": "straight", "labelDy": 30 },
+    { "id": "flow-config-experiment", "from": "config_id", "to": "experiment_id", "label": "retrieval_config_id", "classification": "parámetros", "variant": "default", "labelAt": [745, 205] }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "Identidad Lógica vs Checksum Físico",
+      "items": [
+        "Vector Index ID identifica la receta (dataset ID, modelo E5, revisión, dimensiones, formato)",
+        "Artifact SHA-256 identifica los bytes exactos de index.json (vectores numéricos y procedencia CPU)"
+      ]
+    },
+    {
+      "dot": "cyan",
+      "title": "Inmutabilidad y Trazabilidad de Retrieval",
+      "items": [
+        "Cambiar Top-K genera nuevo retrieval_config_id y experiment_id sin reconstruir el índice",
+        "Todas las identidades usan SHA-256 canónico estable (stable_id) independiente del sistema de archivos"
+      ]
+    }
+  ]
+}
+

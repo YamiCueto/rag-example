@@ -58,6 +58,11 @@ semántica ni demuestra calidad del modelo real.**
 
 ## Formato local y dependencia lógica
 
+[![Cadena de Identidades y Persistencia](architecture/identities.png)](architecture/identities.html)
+
+> [!TIP]
+> Puedes explorar este esquema de forma interactiva en **[identities.html](architecture/identities.html)** para inspeccionar la separación entre la identidad lógica de la receta (`vector_index_id`) y la integridad física (`artifact_sha256`). Para el contexto de extremo a extremo, consulta el **[pipeline general](architecture/pipeline.html)** o el [catálogo de arquitectura](architecture/README.md).
+
 ```text
 artifacts/indexes/<vector_index_id>/
 ├── index.json

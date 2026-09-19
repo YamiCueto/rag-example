@@ -39,9 +39,36 @@ Para un integrante del equipo o comité técnico (CFA), este laboratorio demuest
 
 ---
 
-## Arquitectura del Sistema y Diagramas
+## Arquitectura del Sistema y Diagramas (Archify)
+
+La arquitectura técnica del laboratorio ha sido formalizada, validada y renderizada con **Archify** bajo el perfil interactivo `showcase` (verificada en múltiples resoluciones de escritorio, 0 errores, 0 advertencias).
+
+> [!TIP]
+> **Cómo interactuar con los diagramas interactivos:**
+> - **En GitHub:** Por motivos de seguridad (Content Security Policy), GitHub no ejecuta scripts interactivos dentro de archivos HTML. En la web verás las capturas en alta resolución (**PNG**) y los diagramas **Mermaid**.
+> - **En tu máquina local:** Descarga o clona el repositorio y abre los archivos `.html` en cualquier navegador moderno. Obtendrás la **experiencia interactiva completa**: *Story Mode* (recorrido guiado paso a paso con tecla de espacio o botón `▶`), selector de vistas, zoom/paneo vectorial infinito, inspección de contratos y alternador de tema claro/oscuro.
+> 
+> ```powershell
+> # Abrir los diagramas interactivos en tu navegador (PowerShell en Windows):
+> Start-Process "docs/architecture/pipeline.html"
+> Start-Process "docs/architecture/query-flow.html"
+> Start-Process "docs/architecture/identities.html"
+> ```
+> 
+> Consulta el [Catálogo de Arquitectura Visual](docs/architecture/README.md) para más detalles técnicos de cada especificación.
+
+---
 
 ### 1. Pipeline General: De Documentos a Retrieval
+
+Mapea de extremo a extremo el flujo de datos desde los archivos crudos de texto en disco (`data/raw/*.txt`) hasta la generación del índice persistente y la búsqueda semántica, distinguiendo explícitamente los componentes implementados de las fases pendientes.
+
+[![Pipeline General](docs/architecture/pipeline.png)](docs/architecture/pipeline.html)
+
+*Acciones rápidas:* 🌐 **[Abrir Diagrama Interactivo (HTML)](docs/architecture/pipeline.html)** | 🖼️ **[Ver Imagen en Alta Resolución (PNG)](docs/architecture/pipeline.png)** | 📋 **[Especificación Archify (JSON)](docs/architecture/pipeline.dataflow.json)**
+
+<details>
+<summary>Ver diagrama Mermaid textual alternativo</summary>
 
 ```mermaid
 flowchart TD
@@ -73,12 +100,65 @@ flowchart TD
     Context -.-> Generation
     Generation -.-> Evaluation
 ```
+</details>
 
 ---
 
-### 2. Cadena de Trazabilidad e Identidades Criptográficas
+### 2. Flujo de una Consulta (Retrieval)
 
-Cada objeto del sistema produce un identificador determinista `<kind>-<sha256>` calculado sobre su JSON canónico (`stable_id`):
+Muestra la secuencia de operaciones cuando se recibe una consulta en lenguaje natural: anteposición del prefijo simétrico `query: `, inferencia en ONNX Runtime CPU con pooling y normalización $L_2$, comparación exhaustiva de similitud coseno frente a cada vector del índice ($O(N \times D)$), ordenamiento determinista ($O(N \log N)$) y selección Top-K.
+
+[![Flujo de Consulta](docs/architecture/query-flow.png)](docs/architecture/query-flow.html)
+
+*Acciones rápidas:* 🌐 **[Abrir Diagrama Interactivo (HTML)](docs/architecture/query-flow.html)** | 🖼️ **[Ver Imagen en Alta Resolución (PNG)](docs/architecture/query-flow.png)** | 📋 **[Especificación Archify (JSON)](docs/architecture/query-flow.workflow.json)**
+
+<details>
+<summary>Ver diagrama Mermaid textual alternativo</summary>
+
+```mermaid
+flowchart TD
+    Query["Consulta del Usuario (texto)"]
+    Prefix["Prefijo E5: 'query: '"]
+    Embedder["QueryEmbedder (LocalOnnxEmbedder)"]
+    QueryVec["Vector de Consulta (384 dimensiones unitario)"]
+    
+    subgraph ExhaustiveScan["Comparacion Exhaustiva O(N x D)"]
+        IndexRecords["Registros del Indice (N vectores de pasajes)"]
+        Cosine["cosine_similarity(query_vector, record_vector)"]
+        Candidates["score_all(): N Candidatos (orden original, rank=0)"]
+    end
+    
+    subgraph Ordering["Ordenamiento y Seleccion"]
+        Ranker["rank_candidates(): Orden descendente por score\nDesempate ascendente por chunk_id\nAsigna posiciones rank=1..N"]
+        TopK["top_k(): Selecciona primeros K candidatos\n(Corte de cantidad, sin filtro de threshold)"]
+    end
+    
+    Output["SearchExperiment (Top-K seleccionados + Trazabilidad)"]
+
+    Query --> Prefix
+    Prefix --> Embedder
+    Embedder --> QueryVec
+    QueryVec --> Cosine
+    IndexRecords --> Cosine
+    Cosine --> Candidates
+    Candidates --> Ranker
+    Ranker --> TopK
+    TopK --> Output
+```
+</details>
+
+---
+
+### 3. Cadena de Trazabilidad e Identidades Criptográficas
+
+Visualiza cómo cada objeto del sistema produce un identificador determinista `<kind>-<sha256>` calculado sobre su JSON canónico (`stable_id`). Garantiza que cualquier cambio en documentos fuente, hiperparámetros o modelo propague un cambio determinista en los IDs derivados sin reconstruir artefactos no afectados.
+
+[![Cadena de Identidades](docs/architecture/identities.png)](docs/architecture/identities.html)
+
+*Acciones rápidas:* 🌐 **[Abrir Diagrama Interactivo (HTML)](docs/architecture/identities.html)** | 🖼️ **[Ver Imagen en Alta Resolución (PNG)](docs/architecture/identities.png)** | 📋 **[Especificación Archify (JSON)](docs/architecture/identities.dataflow.json)**
+
+<details>
+<summary>Ver diagrama Mermaid textual alternativo</summary>
 
 ```mermaid
 flowchart TD
@@ -107,12 +187,13 @@ flowchart TD
         RetExpID["Retrieval Experiment ID: retrieval-experiment-<sha256>\n(Vincula indice logico, artefacto fisico, query y config)"]
     end
 ```
+</details>
 
 ---
 
-### 3. Diferencia entre Identidad Lógica y Checksum del Artefacto
+### 4. Diferencia entre Identidad Lógica y Checksum del Artefacto
 
-Una distinción arquitectónica clave de este laboratorio es que la **receta** no es lo mismo que los **bytes en disco**:
+Una distinción arquitectónica clave de este laboratorio es que la **receta declarativa** no es lo mismo que los **bytes físicos en disco**:
 
 * **Identidad Lógica (`vector_index_id`)**: Se deriva exclusivamente del `build_spec` (dependencias declarativas: qué dataset, qué modelo, qué revisión fijada, qué parámetros). No depende de la hora, la ruta absoluta, la versión de NumPy ni los valores flotantes numéricos resultantes.
 * **Checksum del Artefacto (`artifact_sha256` / `index.sha256`)**: Se calcula sobre los bytes exactos serializados de `index.json`. Incluye los 384 flotantes calculados por cada chunk y el bloque de procedencia de runtime (versión de Python, execution provider de ONNX, hilos de CPU).
@@ -146,43 +227,6 @@ flowchart TD
         Verify -- Bytes identicos --> Reuse["Reutiliza artefacto verificado"]
         Verify -- Bytes distintos --> Error["Error: FileExistsError\n(Misma identidad logica con bytes distintos)"]
     end
-```
-
----
-
-### 4. Flujo de una Consulta (Retrieval)
-
-Cómo se procesa una pregunta del usuario frente a un índice vectorial existente:
-
-```mermaid
-flowchart TD
-    Query["Consulta del Usuario (texto)"]
-    Prefix["Prefijo E5: 'query: '"]
-    Embedder["QueryEmbedder (LocalOnnxEmbedder)"]
-    QueryVec["Vector de Consulta (384 dimensiones unitario)"]
-    
-    subgraph ExhaustiveScan["Comparacion Exhaustiva O(N x D)"]
-        IndexRecords["Registros del Indice (N vectores de pasajes)"]
-        Cosine["cosine_similarity(query_vector, record_vector)"]
-        Candidates["score_all(): N Candidatos (orden original, rank=0)"]
-    end
-    
-    subgraph Ordering["Ordenamiento y Seleccion"]
-        Ranker["rank_candidates(): Orden descendente por score\nDesempate ascendente por chunk_id\nAsigna posiciones rank=1..N"]
-        TopK["top_k(): Selecciona primeros K candidatos\n(Corte de cantidad, sin filtro de threshold)"]
-    end
-    
-    Output["SearchExperiment (Top-K seleccionados + Trazabilidad)"]
-
-    Query --> Prefix
-    Prefix --> Embedder
-    Embedder --> QueryVec
-    QueryVec --> Cosine
-    IndexRecords --> Cosine
-    Cosine --> Candidates
-    Candidates --> Ranker
-    Ranker --> TopK
-    TopK --> Output
 ```
 
 ---
@@ -248,12 +292,12 @@ Corre los **51 tests offline** que validan la matemática vectorial, ordenamient
 
 | Etapa / Componente | Código Fuente | Configuración | Documentación Detallada |
 | --- | --- | --- | --- |
-| **Ingestion** | [`src/rag_lab/ingestion/`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/ingestion/) | [`config/pipeline.json`](file:///c:/Users/YAMI/Documents/projects/rag/config/pipeline.json) | Ver sección [Ingestion](#ingestion-del-archivo-al-documento) |
-| **Chunking** | [`src/rag_lab/chunking/`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/chunking/) | [`config/pipeline.json`](file:///c:/Users/YAMI/Documents/projects/rag/config/pipeline.json) | Ver sección [Chunking](#chunking-ventanas-visibles) |
-| **Dataset e Identidades** | [`src/rag_lab/dataset.py`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/dataset.py), [`src/rag_lab/identity.py`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/identity.py) | N/A | Ver sección [Identidades](#identidades-fuente-frente-a-representación) |
-| **Embeddings e Índice** | [`src/rag_lab/embeddings/`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/embeddings/), [`src/rag_lab/indexing/`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/indexing/) | [`config/embedding.json`](file:///c:/Users/YAMI/Documents/projects/rag/config/embedding.json) | [Guía de Embeddings e Índice](docs/embeddings-index.md) |
-| **Retrieval y Búsqueda** | [`src/rag_lab/retrieval/`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/retrieval/) | [`config/retrieval.json`](file:///c:/Users/YAMI/Documents/projects/rag/config/retrieval.json) | [Guía de Retrieval y Similitud](docs/retrieval.md) |
-| **Trazabilidad y Manifest** | [`src/rag_lab/identity.py`](file:///c:/Users/YAMI/Documents/projects/rag/src/rag_lab/identity.py) | [`docs/manifest.example.json`](file:///c:/Users/YAMI/Documents/projects/rag/docs/manifest.example.json) | [Contrato Previsto del Manifest](docs/manifest.md) |
+| **Ingestion** | [`src/rag_lab/ingestion/`](src/rag_lab/ingestion/) | [`config/pipeline.json`](config/pipeline.json) | Ver sección [Ingestion](#ingestion-del-archivo-al-documento) |
+| **Chunking** | [`src/rag_lab/chunking/`](src/rag_lab/chunking/) | [`config/pipeline.json`](config/pipeline.json) | Ver sección [Chunking](#chunking-ventanas-visibles) |
+| **Dataset e Identidades** | [`src/rag_lab/dataset.py`](src/rag_lab/dataset.py), [`src/rag_lab/identity.py`](src/rag_lab/identity.py) | N/A | Ver sección [Identidades](#identidades-fuente-frente-a-representación) |
+| **Embeddings e Índice** | [`src/rag_lab/embeddings/`](src/rag_lab/embeddings/), [`src/rag_lab/indexing/`](src/rag_lab/indexing/) | [`config/embedding.json`](config/embedding.json) | [Guía de Embeddings e Índice](docs/embeddings-index.md) |
+| **Retrieval y Búsqueda** | [`src/rag_lab/retrieval/`](src/rag_lab/retrieval/) | [`config/retrieval.json`](config/retrieval.json) | [Guía de Retrieval y Similitud](docs/retrieval.md) |
+| **Trazabilidad y Manifest** | [`src/rag_lab/identity.py`](src/rag_lab/identity.py) | [`docs/manifest.example.json`](docs/manifest.example.json) | [Contrato Previsto del Manifest](docs/manifest.md) |
 
 ---
 

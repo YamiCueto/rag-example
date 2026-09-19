@@ -47,6 +47,11 @@ desbordamiento y limita pequeños errores de redondeo al intervalo [-1, 1].
 
 ## Búsqueda exhaustiva, ranking y Top-K
 
+[![Flujo de Consulta y Retrieval](architecture/query-flow.png)](architecture/query-flow.html)
+
+> [!TIP]
+> Puedes explorar este flujo de forma interactiva en **[query-flow.html](architecture/query-flow.html)** (con animación paso a paso y desglose de lanes) o consultar el [Catálogo de Arquitectura](architecture/README.md).
+
 ```mermaid
 flowchart TD
     QueryText["Consulta en texto natural: query"]
